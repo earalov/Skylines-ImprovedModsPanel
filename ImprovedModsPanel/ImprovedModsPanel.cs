@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using ColossalFramework.Packaging;
 using ColossalFramework.Plugins;
+using ColossalFramework.Steamworks;
 using ColossalFramework.UI;
 using ICities;
 using UnityEngine;
@@ -11,7 +13,7 @@ using UnityEngine;
 namespace ImprovedModsPanel
 {
 
-    public class ImprovedModsPanel
+    public class ImprovedModsPanel : MonoBehaviour
     {
 
         private enum SortMode
@@ -30,10 +32,21 @@ namespace ImprovedModsPanel
 
         private static SortMode sortMode = SortMode.Alphabetical;
 
+        private static GameObject thisGameObject;
+
         public static void Bootstrap()
         {
             try
             {
+                if (thisGameObject == null)
+                {
+                    thisGameObject = new GameObject();
+                    thisGameObject.name = "ImprovedModsPanel";
+                    thisGameObject.AddComponent<ImprovedModsPanel>();
+                }
+
+                InitializeModSortDropDown();
+
                 if (bootstrapped)
                 {
                     return;
@@ -49,49 +62,6 @@ namespace ImprovedModsPanel
                 {
                     RefreshPlugins();
                 };
-
-                var shadows = GameObject.Find("Shadows").GetComponent<UIPanel>();
-
-                var contentPanel = GameObject.Find("(Library) CustomContentPanel").GetComponent<UIPanel>();
-                var category = contentPanel.Find<UITabContainer>("CategoryContainer");
-                var mods = category.Find<UIPanel>("Mods");
-                var moarGroup = mods.Find<UIPanel>("MoarGroup");
-                var moarLabel = moarGroup.Find<UILabel>("Moar");
-                var moarButton = moarGroup.Find<UIButton>("Button");
-
-                moarGroup.position = new Vector3(moarGroup.position.x, -6.0f, moarGroup.position.z);
-
-                moarLabel.isVisible = false;
-                moarButton.isVisible = false;
-
-                sortDropDown = GameObject.Instantiate(shadows);
-                sortDropDown.transform.parent = moarGroup.transform;
-                sortDropDown.name = "SortBy";
-                sortDropDown.Find<UILabel>("Label").isVisible = false;
-
-                var dropdown = sortDropDown.Find<UIDropDown>("ShadowsQuality");
-                dropdown.name = "SortByDropDown";
-                dropdown.size = new Vector2(200.0f, 24.0f);
-                dropdown.textScale = 0.8f;
-
-                dropdown.eventSelectedIndexChanged += (component, value) =>
-                {
-                    sortMode = (SortMode) value;
-                    RefreshPlugins();
-                };
-
-                var sprite = dropdown.Find<UIButton>("Sprite");
-                sprite.foregroundSpriteMode = UIForegroundSpriteMode.Scale;
-               
-                var enumValues = Enum.GetValues(typeof(SortMode));
-                dropdown.items = new string[enumValues.Length];
-
-                int i = 0;
-                foreach (var value in enumValues)
-                {
-                    dropdown.items[i] = String.Format("Sort by: {0}", EnumToString((SortMode)value));
-                    i++;
-                }
 
                 revertState = RedirectionHelper.RedirectCalls
                 (
@@ -117,6 +87,66 @@ namespace ImprovedModsPanel
             }
         }
 
+        private static void InitializeModSortDropDown()
+        {
+            if (GameObject.Find("ModsSortBy") != null)
+            {
+                return;
+            }
+
+            var shadows = GameObject.Find("Shadows").GetComponent<UIPanel>();
+
+            if (shadows == null)
+            {
+                return;
+            }
+
+            var moarGroup = GameObject.Find("MoarGroup").GetComponent<UIPanel>();
+
+            if (moarGroup == null)
+            {
+                return;
+            }
+
+            var moarLabel = moarGroup.Find<UILabel>("Moar");
+            var moarButton = moarGroup.Find<UIButton>("Button");
+
+            moarGroup.position = new Vector3(moarGroup.position.x, -6.0f, moarGroup.position.z);
+
+            moarLabel.isVisible = false;
+            moarButton.isVisible = false;
+
+            sortDropDown = GameObject.Instantiate(shadows);
+            sortDropDown.gameObject.name = "ModsSortBy";
+            sortDropDown.transform.parent = moarGroup.transform;
+            sortDropDown.name = "ModsSortBy";
+            sortDropDown.Find<UILabel>("Label").isVisible = false;
+
+            var dropdown = sortDropDown.Find<UIDropDown>("ShadowsQuality");
+            dropdown.name = "SortByDropDown";
+            dropdown.size = new Vector2(200.0f, 24.0f);
+            dropdown.textScale = 0.8f;
+
+            dropdown.eventSelectedIndexChanged += (component, value) =>
+            {
+                sortMode = (SortMode)value;
+                RefreshPlugins();
+            };
+
+            var sprite = dropdown.Find<UIButton>("Sprite");
+            sprite.foregroundSpriteMode = UIForegroundSpriteMode.Scale;
+
+            var enumValues = Enum.GetValues(typeof(SortMode));
+            dropdown.items = new string[enumValues.Length];
+
+            int i = 0;
+            foreach (var value in enumValues)
+            {
+                dropdown.items[i] = String.Format("Sort by: {0}", EnumToString((SortMode)value));
+                i++;
+            }
+        }
+
         private static string EnumToString(SortMode mode)
         {
             switch (mode)
@@ -134,6 +164,12 @@ namespace ImprovedModsPanel
 
         public static void Revert()
         {
+            if (thisGameObject != null)
+            {
+                Destroy(thisGameObject);
+                thisGameObject = null;
+            }
+
             if (!bootstrapped)
             {
                 return;
@@ -152,6 +188,41 @@ namespace ImprovedModsPanel
                 BindingFlags.Instance | BindingFlags.NonPublic), revertState2);
 
             bootstrapped = false;
+        }
+
+        private static bool refreshModContents = false;
+
+        void Update()
+        {
+            if (!refreshModContents)
+            {
+                return;
+            }
+
+            var modsList = GameObject.Find("ModsList");
+            if (modsList == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < modsList.transform.childCount; i++)
+            {
+                var child = modsList.transform.GetChild(i).GetComponent<UIPanel>();
+                var shareButton = child.Find<UIButton>("Share");
+                var packageEntry = child.GetComponent<PackageEntry>();
+
+                if (packageEntry.publishedFileId == PublishedFileId.invalid)
+                {
+                    shareButton.isVisible = true;
+                    continue;
+                }
+
+                var workshopDetails = Util.GetPrivate<UGCDetails>(packageEntry, "m_WorkshopDetails");
+                if ((Steam.steamID == workshopDetails.creatorID))
+                {
+                    shareButton.isVisible = true;
+                }
+            }
         }
 
         private static string FormatPackageName(string entryName, string authorName, bool isWorkshopItem)
@@ -220,9 +291,7 @@ namespace ImprovedModsPanel
                 uIComponent.AttachUIComponent(packageEntry.gameObject);
 
                 packageEntry.entryName = String.Format("{0} (by {{0}})", pluginNames[current]);
-
                 packageEntry.entryActive = current.isEnabled;
-
                 packageEntry.pluginInfo = current;
                 packageEntry.publishedFileId = current.publishedFileID;
                 packageEntry.RequestDetails();
@@ -248,7 +317,9 @@ namespace ImprovedModsPanel
                 var share = (UIButton)panel.Find("Share");
                 share.size = new Vector2(84.0f, 20.0f);
                 share.textScale = 0.7f;
+                share.isVisible = false;
                 share.position = new Vector3(1103.0f, -2.0f, share.position.z);
+                share.isVisible = true;
 
                 var lastUpdated = (UILabel)panel.Find("LastUpdated");
                 if (lastUpdated == null)
@@ -278,7 +349,10 @@ namespace ImprovedModsPanel
 
                 count++;
             }
+
+            refreshModContents = true;
         }
+
         private static TimeSpan GetPluginLastModifiedDelta(PluginManager.PluginInfo plugin)
         {
             DateTime lastModified = DateTime.MinValue;
