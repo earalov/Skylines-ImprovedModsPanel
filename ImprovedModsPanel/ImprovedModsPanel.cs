@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using ColossalFramework.Packaging;
 using ColossalFramework.Plugins;
 using ColossalFramework.Steamworks;
 using ColossalFramework.UI;
@@ -170,6 +169,12 @@ namespace ImprovedModsPanel
                 thisGameObject = null;
             }
 
+            if (sortDropDown != null)
+            {
+                Destroy(sortDropDown);
+                sortDropDown = null;
+            }
+
             if (!bootstrapped)
             {
                 return;
@@ -260,6 +265,12 @@ namespace ImprovedModsPanel
             foreach (var current in plugins)
             {
                 IUserMod[] instances = current.GetInstances<IUserMod>();
+                if (instances.Length == 0)
+                {
+                    Debug.LogErrorFormat("User assembly \"{0}\" does not implement the IUserMod interface!");
+                    continue;
+                }
+
                 pluginNames.Add(current, instances[0].Name);
                 pluginDescriptions.Add(current, instances[0].Description);
                 pluginLastUpdatedTimeDelta.Add(current, GetPluginLastModifiedDelta(current));
@@ -330,12 +341,13 @@ namespace ImprovedModsPanel
                 lastUpdated.name = "LastUpdated";
                 lastUpdated.autoSize = false;
                 lastUpdated.size = new Vector2(400.0f, 18.0f);
+                lastUpdated.textScale = 0.8f;
                 lastUpdated.textAlignment = UIHorizontalAlignment.Right;
                 lastUpdated.textColor = blackColor;
                 lastUpdated.text = String.Format("Last update: {0}",
                     DateTimeUtil.TimeSpanToString(pluginLastUpdatedTimeDelta[current]));
                 lastUpdated.AlignTo(panel, UIAlignAnchor.TopRight);
-                lastUpdated.relativePosition = new Vector3(600.0f, 4.0f, 0.0f);
+                lastUpdated.relativePosition = new Vector3(600.0f, 6.0f, 0.0f);
 
                 var delete = (UIButton)panel.Find("Delete");
                 delete.size = new Vector2(24.0f, 24.0f);
