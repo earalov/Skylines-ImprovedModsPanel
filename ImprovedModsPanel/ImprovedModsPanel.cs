@@ -197,6 +197,11 @@ namespace ImprovedModsPanel
 
         private static bool refreshModContents = false;
 
+        void OnDestroy()
+        {
+            Revert();
+        }
+
         void Update()
         {
             if (!refreshModContents)
