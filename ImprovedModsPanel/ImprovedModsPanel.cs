@@ -40,7 +40,7 @@ namespace ImprovedModsPanel
                 if (thisGameObject == null)
                 {
                     thisGameObject = new GameObject();
-                    thisGameObject.name = "ImprovedModsPanel";
+                    thisGameObject.name = "ImprovedModsPanel [Fixed For v1.1]";
                     thisGameObject.AddComponent<ImprovedModsPanel>();
                 }
 
@@ -51,13 +51,8 @@ namespace ImprovedModsPanel
                     return;
                 }
 
-                var modsList = GameObject.Find("ModsList");
-                if (modsList == null)
-                {
-                    return;
-                }
-
-                modsList.AddComponent<UpdateHook>().onUnityUpdate = () =>
+                var ContentManagerPanel = GameObject.Find("(Library) ContentManagerPanel").GetComponent<ContentManagerPanel>();
+                ContentManagerPanel.gameObject.AddComponent<UpdateHook>().onUnityUpdate = () =>
                 {
                     RefreshPlugins();
                 };
@@ -72,7 +67,7 @@ namespace ImprovedModsPanel
 
                 revertState2 = RedirectionHelper.RedirectCalls
                 (
-                    typeof(CustomContentPanel).GetMethod("RefreshPlugins",
+                    typeof(ContentManagerPanel).GetMethod("RefreshPlugins",
                         BindingFlags.Instance | BindingFlags.NonPublic),
                     typeof(ImprovedModsPanel).GetMethod("RefreshPlugins",
                         BindingFlags.Static | BindingFlags.Public)
@@ -180,7 +175,8 @@ namespace ImprovedModsPanel
                 return;
             }
 
-            var modsList = GameObject.Find("ModsList");
+            UITabContainer categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
+            var modsList = categoryContainer.Find("Mods").Find("Content");
             if (modsList == null)
             {
                 return;
@@ -189,7 +185,7 @@ namespace ImprovedModsPanel
             RedirectionHelper.RevertRedirect(typeof(PackageEntry).GetMethod("FormatPackageName",
                     BindingFlags.Static | BindingFlags.NonPublic), revertState);
 
-            RedirectionHelper.RevertRedirect(typeof(CustomContentPanel).GetMethod("RefreshPlugins",
+            RedirectionHelper.RevertRedirect(typeof(ContentManagerPanel).GetMethod("RefreshPlugins",
                 BindingFlags.Instance | BindingFlags.NonPublic), revertState2);
 
             bootstrapped = false;
@@ -209,7 +205,8 @@ namespace ImprovedModsPanel
                 return;
             }
 
-            var modsList = GameObject.Find("ModsList");
+            UITabContainer categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
+            var modsList = categoryContainer.Find("Mods").Find("Content");
             if (modsList == null)
             {
                 return;
@@ -252,7 +249,8 @@ namespace ImprovedModsPanel
 
         public static void RefreshPlugins()
         {
-            var modsList = GameObject.Find("ModsList");
+            UITabContainer categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
+            var modsList = categoryContainer.Find("Mods").Find("Content");
             if (modsList == null)
             {
                 return;
@@ -314,27 +312,26 @@ namespace ImprovedModsPanel
 
                 var panel = packageEntry.gameObject.GetComponent<UIPanel>();
                 panel.size = new Vector2(panel.size.x, 24.0f);
-                panel.color = count % 2 == 0 ? panel.color : new Color32
-                    ((byte)(panel.color.r * 0.60f), (byte)(panel.color.g * 0.60f), (byte)(panel.color.b * 0.60f), panel.color.a);
+ /*               panel.color = count % 2 == 0 ? panel.color : new Color32
+                    ((byte)(panel.color.r * 0.60f), (byte)(panel.color.g * 0.60f), (byte)(panel.color.b * 0.60f), panel.color.a);*/
 
                 var name = (UILabel)panel.Find("Name");
                 name.textScale = 0.85f;
                 name.tooltip = pluginDescriptions[current];
-                name.textColor = count % 2 == 0 ? blackColor : whiteColor;
+                name.textColor = /*count % 2 == 0 ? blackColor :*/ whiteColor;
                 name.textScaleMode = UITextScaleMode.ControlSize;
                 name.position = new Vector3(30.0f, 2.0f, name.position.z);
 
                 var view = (UIButton)panel.Find("View");
-                view.size = new Vector2(84.0f, 20.0f);
+                view.size = new Vector2(20.0f, 20.0f);
                 view.textScale = 0.7f;
-                view.text = "WORKSHOP";
-                view.position = new Vector3(1011.0f, -2.0f, view.position.z);
+                view.position = new Vector3(675.0f, 2.0f, view.position.z);
 
                 var share = (UIButton)panel.Find("Share");
                 share.size = new Vector2(84.0f, 20.0f);
                 share.textScale = 0.7f;
                 share.isVisible = false;
-                share.position = new Vector3(1103.0f, -2.0f, share.position.z);
+                share.position = new Vector3(703.0f, 2.0f, share.position.z);
                 share.isVisible = true;
 
                 var lastUpdated = (UILabel)panel.Find("LastUpdated");
@@ -348,18 +345,18 @@ namespace ImprovedModsPanel
                 lastUpdated.size = new Vector2(400.0f, 18.0f);
                 lastUpdated.textScale = 0.8f;
                 lastUpdated.textAlignment = UIHorizontalAlignment.Right;
-                lastUpdated.textColor = blackColor;
+                lastUpdated.textColor = whiteColor;
                 lastUpdated.text = String.Format("Last update: {0}",
                     DateTimeUtil.TimeSpanToString(pluginLastUpdatedTimeDelta[current]));
                 lastUpdated.AlignTo(panel, UIAlignAnchor.TopRight);
-                lastUpdated.relativePosition = new Vector3(600.0f, 6.0f, 0.0f);
+                lastUpdated.relativePosition = new Vector3(264.0f, 6.0f, 0.0f);
 
                 var delete = (UIButton)panel.Find("Delete");
                 delete.size = new Vector2(24.0f, 24.0f);
-                delete.position = new Vector3(1195.0f, delete.position.y, delete.position.z);
+                delete.position = new Vector3(895.0f, 2.0f, delete.position.z);
 
                 var active = (UICheckBox)panel.Find("Active");
-                active.position = new Vector3(4.0f, active.position.y, active.position.z);
+                active.position = new Vector3(4.0f, -2.0f, active.position.z);
 
                 var onOff = (UILabel)active.Find("OnOff");
                 onOff.enabled = false;
