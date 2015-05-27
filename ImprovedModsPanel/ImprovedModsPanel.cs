@@ -77,7 +77,7 @@ namespace ImprovedModsPanel
             }
             catch (Exception ex)
             {
-               Debug.LogException(ex);   
+                Debug.LogException(ex);
             }
         }
 
@@ -145,12 +145,12 @@ namespace ImprovedModsPanel
         {
             switch (mode)
             {
-            case SortMode.Alphabetical:
-                return "Name";
-            case SortMode.LastSubscribed:
-                return "Last subscribed";
-            case SortMode.LastUpdated:
-                return "Last updated";
+                case SortMode.Alphabetical:
+                    return "Name";
+                case SortMode.LastSubscribed:
+                    return "Last subscribed";
+                case SortMode.LastUpdated:
+                    return "Last updated";
             }
 
             return "Unknown";
@@ -312,8 +312,8 @@ namespace ImprovedModsPanel
 
                 var panel = packageEntry.gameObject.GetComponent<UIPanel>();
                 panel.size = new Vector2(panel.size.x, 24.0f);
- /*               panel.color = count % 2 == 0 ? panel.color : new Color32
-                    ((byte)(panel.color.r * 0.60f), (byte)(panel.color.g * 0.60f), (byte)(panel.color.b * 0.60f), panel.color.a);*/
+                /*               panel.color = count % 2 == 0 ? panel.color : new Color32
+                                   ((byte)(panel.color.r * 0.60f), (byte)(panel.color.g * 0.60f), (byte)(panel.color.b * 0.60f), panel.color.a);*/
 
                 var name = (UILabel)panel.Find("Name");
                 name.textScale = 0.85f;

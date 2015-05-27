@@ -11,7 +11,7 @@ namespace ImprovedModsPanel
             get
             {
                 ImprovedModsPanel.Bootstrap();
-                return "ImprovedModsPanel"; 
+                return "ImprovedModsPanel";
             }
         }
 
@@ -21,5 +21,5 @@ namespace ImprovedModsPanel
         }
 
     }
- 
+
 }
