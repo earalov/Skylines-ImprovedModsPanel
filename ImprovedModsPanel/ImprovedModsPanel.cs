@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -17,63 +18,85 @@ namespace ImprovedModsPanel
 
         private enum SortMode
         {
+            [Description("Name")]
             Alphabetical = 0,
+            [Description("Last updated")]
             LastUpdated = 1,
-            LastSubscribed = 2
+            [Description("Last subscribed")]
+            LastSubscribed = 2,
+            [Description("Active")]
+            Active = 3
         }
 
-        private static bool bootstrapped = false;
+        private enum SortOrder
+        {
+            [Description("Ascending")]
+            Ascending = 0,
+            [Description("Descending")]
+            Descending = 1
+        }
 
-        private static RedirectCallsState revertState;
-        private static RedirectCallsState revertState2;
+        private static bool _bootstrapped;
 
-        private static UIPanel sortDropDown;
 
-        private static SortMode sortMode = SortMode.Alphabetical;
+        private static bool _detoured = false;
+        private static RedirectCallsState _revertState;
+        private static RedirectCallsState _revertState2;
 
-        private static GameObject thisGameObject;
+
+        private static SortMode _sortMode = SortMode.Alphabetical;
+        private static SortOrder _sortOrder = SortOrder.Ascending;
+
+        private static GameObject _thisGameObject;
+
+        private static UIPanel _sortPanel;
+        private static UIDropDown _sortDropDown;
+        private static UILabel _sortLabel;
 
         public static void Bootstrap()
         {
+            if (_bootstrapped)
+            {
+                return;
+            }
             try
             {
-                if (thisGameObject == null)
+                if (_thisGameObject == null)
                 {
-                    thisGameObject = new GameObject();
-                    thisGameObject.name = "ImprovedModsPanel [Fixed For v1.1]";
-                    thisGameObject.AddComponent<ImprovedModsPanel>();
+                    _thisGameObject = new GameObject { name = "ImprovedModsPanel" };
+                    _thisGameObject.AddComponent<ImprovedModsPanel>();
                 }
+
+                if (!_detoured)
+                {
+                    _revertState = RedirectionHelper.RedirectCalls
+                    (
+                        typeof(PackageEntry).GetMethod("FormatPackageName",
+                            BindingFlags.Static | BindingFlags.NonPublic),
+                        typeof(ImprovedModsPanel).GetMethod("FormatPackageName",
+                            BindingFlags.Static | BindingFlags.NonPublic)
+                    );
+
+                    _revertState2 = RedirectionHelper.RedirectCalls
+                    (
+                        typeof(ContentManagerPanel).GetMethod("RefreshPlugins",
+                            BindingFlags.Instance | BindingFlags.NonPublic),
+                        typeof(ImprovedModsPanel).GetMethod("RefreshPlugins",
+                            BindingFlags.Static | BindingFlags.Public)
+                    );
+                    _detoured = true;
+                }
+
 
                 InitializeModSortDropDown();
 
-                if (bootstrapped)
+                var contentManagerPanelObj = GameObject.Find("(Library) ContentManagerPanel");
+                if (contentManagerPanelObj == null)
                 {
                     return;
                 }
-
-                var ContentManagerPanel = GameObject.Find("(Library) ContentManagerPanel").GetComponent<ContentManagerPanel>();
-                ContentManagerPanel.gameObject.AddComponent<UpdateHook>().onUnityUpdate = () =>
-                {
-                    RefreshPlugins();
-                };
-
-                revertState = RedirectionHelper.RedirectCalls
-                (
-                    typeof(PackageEntry).GetMethod("FormatPackageName",
-                        BindingFlags.Static | BindingFlags.NonPublic),
-                    typeof(ImprovedModsPanel).GetMethod("FormatPackageName",
-                        BindingFlags.Static | BindingFlags.NonPublic)
-                );
-
-                revertState2 = RedirectionHelper.RedirectCalls
-                (
-                    typeof(ContentManagerPanel).GetMethod("RefreshPlugins",
-                        BindingFlags.Instance | BindingFlags.NonPublic),
-                    typeof(ImprovedModsPanel).GetMethod("RefreshPlugins",
-                        BindingFlags.Static | BindingFlags.Public)
-                );
-
-                bootstrapped = true;
+                contentManagerPanelObj.AddComponent<UpdateHook>().onUnityUpdate = RefreshPlugins;
+                _bootstrapped = true;
             }
             catch (Exception ex)
             {
@@ -83,25 +106,17 @@ namespace ImprovedModsPanel
 
         private static void InitializeModSortDropDown()
         {
-            if (GameObject.Find("ModsSortBy") != null)
+            if (_sortDropDown != null)
             {
                 return;
             }
 
-            var shadows = GameObject.Find("Shadows").GetComponent<UIPanel>();
-
-            if (shadows == null)
+            var moarGroupObj = GameObject.Find("MoarGroup");
+            if (moarGroupObj == null)
             {
                 return;
             }
-
-            var moarGroup = GameObject.Find("MoarGroup").GetComponent<UIPanel>();
-
-            if (moarGroup == null)
-            {
-                return;
-            }
-
+            var moarGroup = moarGroupObj.GetComponent<UIPanel>();
             var moarLabel = moarGroup.Find<UILabel>("Moar");
             var moarButton = moarGroup.Find<UIButton>("Button");
 
@@ -110,88 +125,73 @@ namespace ImprovedModsPanel
             moarLabel.isVisible = false;
             moarButton.isVisible = false;
 
-            sortDropDown = GameObject.Instantiate(shadows);
-            sortDropDown.gameObject.name = "ModsSortBy";
-            sortDropDown.transform.parent = moarGroup.transform;
-            sortDropDown.name = "ModsSortBy";
-            sortDropDown.Find<UILabel>("Label").isVisible = false;
+            var uiView = FindObjectOfType<UIView>();
 
-            var dropdown = sortDropDown.Find<UIDropDown>("ShadowsQuality");
-            dropdown.name = "SortByDropDown";
-            dropdown.size = new Vector2(200.0f, 24.0f);
-            dropdown.textScale = 0.8f;
 
-            dropdown.eventSelectedIndexChanged += (component, value) =>
-            {
-                sortMode = (SortMode)value;
-                RefreshPlugins();
-            };
+            _sortPanel = uiView.AddUIComponent(typeof(UIPanel)) as UIPanel;
+            _sortPanel.transform.parent = moarGroup.transform;
 
-            var sprite = dropdown.Find<UIButton>("Sprite");
-            sprite.foregroundSpriteMode = UIForegroundSpriteMode.Scale;
+            _sortDropDown = UIUtils.CreateDropDown(_sortPanel);
+            _sortDropDown.size = new Vector2(200.0f, 24.0f);
+            _sortDropDown.AlignTo(_sortPanel, UIAlignAnchor.TopLeft);
 
             var enumValues = Enum.GetValues(typeof(SortMode));
-            dropdown.items = new string[enumValues.Length];
-
-            int i = 0;
+            _sortDropDown.items = new string[enumValues.Length];
+            var i = 0;
             foreach (var value in enumValues)
             {
-                dropdown.items[i] = String.Format("Sort by: {0}", EnumToString((SortMode)value));
+                _sortDropDown.items[i] = ((SortMode)value).GetEnumDescription();
                 i++;
             }
-        }
+            _sortDropDown.selectedIndex = 0;
 
-        private static string EnumToString(SortMode mode)
-        {
-            switch (mode)
+            _sortDropDown.eventSelectedIndexChanged += (component, value) =>
             {
-                case SortMode.Alphabetical:
-                    return "Name";
-                case SortMode.LastSubscribed:
-                    return "Last subscribed";
-                case SortMode.LastUpdated:
-                    return "Last updated";
-            }
+                _sortDropDown.enabled = false;
+                _sortMode = (SortMode)value;
+                RefreshPlugins();
+                _sortDropDown.enabled = true;
+            };
 
-            return "Unknown";
+            _sortLabel = InitializeLabel(uiView, _sortPanel, "Sort by");
         }
 
         public static void Revert()
         {
-            if (thisGameObject != null)
+            if (_thisGameObject != null)
             {
-                Destroy(thisGameObject);
-                thisGameObject = null;
+                Destroy(_thisGameObject);
+                _thisGameObject = null;
             }
 
-            if (sortDropDown != null)
+            if (_sortPanel != null)
             {
-                Destroy(sortDropDown);
-                sortDropDown = null;
+                Destroy(_sortPanel.gameObject);
             }
+            _sortPanel = null;
+            _sortDropDown = null;
+            _sortLabel = null;
 
-            if (!bootstrapped)
-            {
-                return;
-            }
-
-            UITabContainer categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
-            var modsList = categoryContainer.Find("Mods").Find("Content");
-            if (modsList == null)
+            if (!_bootstrapped)
             {
                 return;
             }
 
-            RedirectionHelper.RevertRedirect(typeof(PackageEntry).GetMethod("FormatPackageName",
-                    BindingFlags.Static | BindingFlags.NonPublic), revertState);
+            if (_detoured)
+            {
+                _sortOrder = SortOrder.Ascending;
+                RedirectionHelper.RevertRedirect(typeof(PackageEntry).GetMethod("FormatPackageName",
+                        BindingFlags.Static | BindingFlags.NonPublic), _revertState);
 
-            RedirectionHelper.RevertRedirect(typeof(ContentManagerPanel).GetMethod("RefreshPlugins",
-                BindingFlags.Instance | BindingFlags.NonPublic), revertState2);
+                RedirectionHelper.RevertRedirect(typeof(ContentManagerPanel).GetMethod("RefreshPlugins",
+                    BindingFlags.Instance | BindingFlags.NonPublic), _revertState2);
+                _detoured = false;
+            }
 
-            bootstrapped = false;
+            _bootstrapped = false;
         }
 
-        private static bool refreshModContents = false;
+        private static bool _refreshModContents;
 
         void OnDestroy()
         {
@@ -200,19 +200,19 @@ namespace ImprovedModsPanel
 
         void Update()
         {
-            if (!refreshModContents)
+            if (!_refreshModContents || !_bootstrapped)
             {
                 return;
             }
 
-            UITabContainer categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
+            var categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
             var modsList = categoryContainer.Find("Mods").Find("Content");
             if (modsList == null)
             {
                 return;
             }
 
-            for (int i = 0; i < modsList.transform.childCount; i++)
+            for (var i = 0; i < modsList.transform.childCount; i++)
             {
                 var child = modsList.transform.GetChild(i).GetComponent<UIPanel>();
                 var shareButton = child.Find<UIButton>("Share");
@@ -234,40 +234,43 @@ namespace ImprovedModsPanel
 
         private static string FormatPackageName(string entryName, string authorName, bool isWorkshopItem)
         {
-            if (!isWorkshopItem)
-            {
-                return String.Format(entryName, authorName);
-            }
-            else
-            {
-                return String.Format(entryName, "Unknown");
-            }
+            return String.Format(entryName, !isWorkshopItem ? authorName : "Unknown");
         }
 
-        private static Color32 blackColor = new Color32(0, 0, 0, 255);
-        private static Color32 whiteColor = new Color32(200, 200, 200, 255);
+
+        private static UILabel InitializeLabel(UIView uiView, UIComponent parent, string labelText)
+        {
+            var label = uiView.AddUIComponent(typeof(UILabel)) as UILabel;
+            label.transform.parent = parent.transform;
+            label.text = labelText;
+            label.AlignTo(parent, UIAlignAnchor.TopLeft);
+            label.textColor = Color.white;
+            label.textScale = 0.5f;
+            return label;
+        }
+
 
         public static void RefreshPlugins()
         {
-            UITabContainer categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
+            var categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
             var modsList = categoryContainer.Find("Mods").Find("Content");
             if (modsList == null)
             {
                 return;
             }
 
-            var uiView = GameObject.FindObjectOfType<UIView>();
+            var uiView = FindObjectOfType<UIView>();
 
             var plugins = PluginManager.instance.GetPluginsInfo();
 
-            Dictionary<PluginManager.PluginInfo, string> pluginNames = new Dictionary<PluginManager.PluginInfo, string>();
-            Dictionary<PluginManager.PluginInfo, string> pluginDescriptions = new Dictionary<PluginManager.PluginInfo, string>();
-            Dictionary<PluginManager.PluginInfo, TimeSpan> pluginLastUpdatedTimeDelta = new Dictionary<PluginManager.PluginInfo, TimeSpan>();
-            Dictionary<PluginManager.PluginInfo, TimeSpan> pluginSubscribedTimeDelta = new Dictionary<PluginManager.PluginInfo, TimeSpan>();
+            var pluginNames = new Dictionary<PluginManager.PluginInfo, string>();
+            var pluginDescriptions = new Dictionary<PluginManager.PluginInfo, string>();
+            var pluginLastUpdatedTimeDelta = new Dictionary<PluginManager.PluginInfo, TimeSpan>();
+            var pluginSubscribedTimeDelta = new Dictionary<PluginManager.PluginInfo, TimeSpan>();
 
             foreach (var current in plugins)
             {
-                IUserMod[] instances = current.GetInstances<IUserMod>();
+                var instances = current.GetInstances<IUserMod>();
                 if (instances.Length == 0)
                 {
                     Debug.LogErrorFormat("User assembly \"{0}\" does not implement the IUserMod interface!");
@@ -280,28 +283,47 @@ namespace ImprovedModsPanel
                 pluginSubscribedTimeDelta.Add(current, GetPluginCreatedDelta(current));
             }
 
-            UIComponent uIComponent = modsList.GetComponent<UIComponent>();
+            var uIComponent = modsList.GetComponent<UIComponent>();
             UITemplateManager.ClearInstances("ModEntryTemplate");
 
             var pluginsSorted = PluginManager.instance.GetPluginsInfo().ToArray();
 
-            if (sortMode == SortMode.Alphabetical)
+            Func<PluginManager.PluginInfo, PluginManager.PluginInfo, int> comparerLambda;
+            var alphabeticalSort = false;
+
+            Func<PluginManager.PluginInfo, PluginManager.PluginInfo, int> compareNames =
+                (a, b) => String.Compare(pluginNames[a], pluginNames[b], StringComparison.InvariantCultureIgnoreCase);
+            switch (_sortMode)
             {
-                Array.Sort(pluginsSorted, (a, b) => pluginNames[a].CompareTo(pluginNames[b]));
-            }
-            else if (sortMode == SortMode.LastUpdated)
-            {
-                Array.Sort(pluginsSorted, (a, b) => pluginLastUpdatedTimeDelta[a].CompareTo(pluginLastUpdatedTimeDelta[b]));
-            }
-            else if (sortMode == SortMode.LastSubscribed)
-            {
-                Array.Sort(pluginsSorted, (a, b) => pluginSubscribedTimeDelta[a].CompareTo(pluginSubscribedTimeDelta[b]));
+                case SortMode.Alphabetical:
+                    comparerLambda = compareNames;
+                    alphabeticalSort = true;
+                    break;
+                case SortMode.LastUpdated:
+                    comparerLambda = (a, b) => pluginLastUpdatedTimeDelta[a].CompareTo(pluginLastUpdatedTimeDelta[b]);
+                    break;
+                case SortMode.LastSubscribed:
+                    comparerLambda = (a, b) => pluginSubscribedTimeDelta[a].CompareTo(pluginSubscribedTimeDelta[b]);
+                    break;
+                case SortMode.Active:
+                    comparerLambda = (a, b) => b.isEnabled.CompareTo(a.isEnabled);
+                    break;
+                default:
+                    throw new Exception(String.Format("Unknown sort mode: '{0}'", _sortMode));
             }
 
-            int count = 0;
+            Array.Sort(pluginsSorted, new FunctionalComparer<PluginManager.PluginInfo>((a, b) =>
+            {
+                var diff = (_sortOrder == SortOrder.Ascending ? comparerLambda : (arg1, arg2) => -comparerLambda(arg1, arg2))(a, b);
+                return diff != 0 || alphabeticalSort ? diff : compareNames(a, b);
+
+            }));
+
+            var whiteColor = new Color32(200, 200, 200, 255);
+
             foreach (var current in pluginsSorted)
             {
-                PackageEntry packageEntry = UITemplateManager.Get<PackageEntry>("ModEntryTemplate");
+                var packageEntry = UITemplateManager.Get<PackageEntry>("ModEntryTemplate");
                 uIComponent.AttachUIComponent(packageEntry.gameObject);
 
                 packageEntry.entryName = String.Format("{0} (by {{0}})", pluginNames[current]);
@@ -312,13 +334,11 @@ namespace ImprovedModsPanel
 
                 var panel = packageEntry.gameObject.GetComponent<UIPanel>();
                 panel.size = new Vector2(panel.size.x, 24.0f);
-                /*               panel.color = count % 2 == 0 ? panel.color : new Color32
-                                   ((byte)(panel.color.r * 0.60f), (byte)(panel.color.g * 0.60f), (byte)(panel.color.b * 0.60f), panel.color.a);*/
 
                 var name = (UILabel)panel.Find("Name");
                 name.textScale = 0.85f;
                 name.tooltip = pluginDescriptions[current];
-                name.textColor = /*count % 2 == 0 ? blackColor :*/ whiteColor;
+                name.textColor = whiteColor;
                 name.textScaleMode = UITextScaleMode.ControlSize;
                 name.position = new Vector3(30.0f, 2.0f, name.position.z);
 
@@ -330,15 +350,16 @@ namespace ImprovedModsPanel
                 var share = (UIButton)panel.Find("Share");
                 share.size = new Vector2(84.0f, 20.0f);
                 share.textScale = 0.7f;
-                share.isVisible = false;
                 share.position = new Vector3(703.0f, 2.0f, share.position.z);
-                share.isVisible = true;
 
-                var lastUpdated = (UILabel)panel.Find("LastUpdated");
-                if (lastUpdated == null)
-                {
-                    lastUpdated = uiView.AddUIComponent(typeof(UILabel)) as UILabel;
-                }
+                var options = (UIButton)panel.Find("Options");
+                options.size = new Vector2(84.0f, 20.0f);
+                options.textScale = 0.7f;
+                options.position = new Vector3(790.0f, 2.0f, options.position.z);
+
+
+                var lastUpdated = (UILabel)panel.Find("LastUpdated") ??
+                                  uiView.AddUIComponent(typeof(UILabel)) as UILabel;
 
                 lastUpdated.name = "LastUpdated";
                 lastUpdated.autoSize = false;
@@ -360,26 +381,25 @@ namespace ImprovedModsPanel
 
                 var onOff = (UILabel)active.Find("OnOff");
                 onOff.enabled = false;
-
-                count++;
             }
 
-            refreshModContents = true;
+            _refreshModContents = true;
         }
 
         private static TimeSpan GetPluginLastModifiedDelta(PluginManager.PluginInfo plugin)
         {
-            DateTime lastModified = DateTime.MinValue;
+            var lastModified = DateTime.MinValue;
 
             foreach (var file in Directory.GetFiles(plugin.modPath))
             {
-                if (Path.GetExtension(file) == ".dll")
+                if (Path.GetExtension(file) != ".dll")
                 {
-                    var tmp = File.GetLastWriteTime(file);
-                    if (tmp > lastModified)
-                    {
-                        lastModified = tmp;
-                    }
+                    continue;
+                }
+                var tmp = File.GetLastWriteTime(file);
+                if (tmp > lastModified)
+                {
+                    lastModified = tmp;
                 }
             }
 
@@ -388,17 +408,15 @@ namespace ImprovedModsPanel
 
         private static TimeSpan GetPluginCreatedDelta(PluginManager.PluginInfo plugin)
         {
-            DateTime created = DateTime.MinValue;
+            var created = DateTime.MinValue;
 
             foreach (var file in Directory.GetFiles(plugin.modPath))
             {
-                if (Path.GetExtension(file) == ".dll")
+                if (Path.GetExtension(file) != ".dll") continue;
+                var tmp = File.GetCreationTime(file);
+                if (tmp > created)
                 {
-                    var tmp = File.GetCreationTime(file);
-                    if (tmp > created)
-                    {
-                        created = tmp;
-                    }
+                    created = tmp;
                 }
             }
 
