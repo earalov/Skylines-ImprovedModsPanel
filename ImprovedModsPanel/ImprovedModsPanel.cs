@@ -199,40 +199,6 @@ namespace ImprovedModsPanel
             Revert();
         }
 
-//        void Update()
-//        {
-//            if (!_refreshModContents || !_bootstrapped)
-//            {
-//                return;
-//            }
-//
-//            var categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
-//            var modsList = categoryContainer.Find("Mods").Find("Content");
-//            if (modsList == null)
-//            {
-//                return;
-//            }
-//
-//            for (var i = 0; i < modsList.transform.childCount; i++)
-//            {
-//                var child = modsList.transform.GetChild(i).GetComponent<UIPanel>();
-//                var shareButton = child.Find<UIButton>("Share");
-//                var packageEntry = child.GetComponent<PackageEntry>();
-//
-//                if (packageEntry.publishedFileId == PublishedFileId.invalid)
-//                {
-//                    shareButton.isVisible = true;
-//                    continue;
-//                }
-//
-//                var workshopDetails = Util.GetPrivate<UGCDetails>(packageEntry, "m_WorkshopDetails");
-//                if ((Steam.steamID == workshopDetails.creatorID))
-//                {
-//                    shareButton.isVisible = true;
-//                }
-//            }
-//        }
-
         private static string FormatPackageName(string entryName, string authorName, bool isWorkshopItem)
         {
             return String.Format(entryName, !isWorkshopItem ? authorName : "Unknown");
@@ -383,8 +349,6 @@ namespace ImprovedModsPanel
                 var onOff = (UILabel)active.Find("OnOff");
                 onOff.enabled = false;
             }
-
-            //_refreshModContents = true;
         }
 
         private static TimeSpan GetPluginLastModifiedDelta(PluginManager.PluginInfo plugin)
