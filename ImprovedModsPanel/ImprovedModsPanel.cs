@@ -65,6 +65,19 @@ namespace ImprovedModsPanel
                 {
                     _thisGameObject = new GameObject { name = "ImprovedModsPanel" };
                     _thisGameObject.AddComponent<ImprovedModsPanel>();
+                    var updateHook = _thisGameObject.AddComponent<UpdateHook>();
+                    updateHook.once = false;
+                    updateHook.onUnityUpdate = () =>
+                    {
+                        var contentManagerPanelObj = GameObject.Find("(Library) ContentManagerPanel");
+                        if (contentManagerPanelObj == null)
+                        {
+                            return;
+                        }
+                        updateHook.once = true;
+                        InitializeModSortDropDown();
+                        _thisGameObject.gameObject.AddComponent<UpdateHook>().onUnityUpdate = RefreshPlugins;
+                    };
                 }
 
                 if (!_detoured)
@@ -86,16 +99,6 @@ namespace ImprovedModsPanel
                     );
                     _detoured = true;
                 }
-
-
-                InitializeModSortDropDown();
-
-                var contentManagerPanelObj = GameObject.Find("(Library) ContentManagerPanel");
-                if (contentManagerPanelObj == null)
-                {
-                    return;
-                }
-                contentManagerPanelObj.AddComponent<UpdateHook>().onUnityUpdate = RefreshPlugins;
                 _bootstrapped = true;
             }
             catch (Exception ex)
@@ -191,46 +194,44 @@ namespace ImprovedModsPanel
             _bootstrapped = false;
         }
 
-        private static bool _refreshModContents;
-
         void OnDestroy()
         {
             Revert();
         }
 
-        void Update()
-        {
-            if (!_refreshModContents || !_bootstrapped)
-            {
-                return;
-            }
-
-            var categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
-            var modsList = categoryContainer.Find("Mods").Find("Content");
-            if (modsList == null)
-            {
-                return;
-            }
-
-            for (var i = 0; i < modsList.transform.childCount; i++)
-            {
-                var child = modsList.transform.GetChild(i).GetComponent<UIPanel>();
-                var shareButton = child.Find<UIButton>("Share");
-                var packageEntry = child.GetComponent<PackageEntry>();
-
-                if (packageEntry.publishedFileId == PublishedFileId.invalid)
-                {
-                    shareButton.isVisible = true;
-                    continue;
-                }
-
-                var workshopDetails = Util.GetPrivate<UGCDetails>(packageEntry, "m_WorkshopDetails");
-                if ((Steam.steamID == workshopDetails.creatorID))
-                {
-                    shareButton.isVisible = true;
-                }
-            }
-        }
+//        void Update()
+//        {
+//            if (!_refreshModContents || !_bootstrapped)
+//            {
+//                return;
+//            }
+//
+//            var categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
+//            var modsList = categoryContainer.Find("Mods").Find("Content");
+//            if (modsList == null)
+//            {
+//                return;
+//            }
+//
+//            for (var i = 0; i < modsList.transform.childCount; i++)
+//            {
+//                var child = modsList.transform.GetChild(i).GetComponent<UIPanel>();
+//                var shareButton = child.Find<UIButton>("Share");
+//                var packageEntry = child.GetComponent<PackageEntry>();
+//
+//                if (packageEntry.publishedFileId == PublishedFileId.invalid)
+//                {
+//                    shareButton.isVisible = true;
+//                    continue;
+//                }
+//
+//                var workshopDetails = Util.GetPrivate<UGCDetails>(packageEntry, "m_WorkshopDetails");
+//                if ((Steam.steamID == workshopDetails.creatorID))
+//                {
+//                    shareButton.isVisible = true;
+//                }
+//            }
+//        }
 
         private static string FormatPackageName(string entryName, string authorName, bool isWorkshopItem)
         {
@@ -383,7 +384,7 @@ namespace ImprovedModsPanel
                 onOff.enabled = false;
             }
 
-            _refreshModContents = true;
+            //_refreshModContents = true;
         }
 
         private static TimeSpan GetPluginLastModifiedDelta(PluginManager.PluginInfo plugin)
