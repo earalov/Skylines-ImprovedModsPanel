@@ -217,6 +217,14 @@ namespace ImprovedModsPanel
         }
 
 
+        private class Plugin
+        {
+            public string name;
+            public string description;
+            public TimeSpan lastUpdatedTimeDelta;
+            public TimeSpan subscribedTimeDelta;   
+        }
+
         public static void RefreshPlugins()
         {
             var categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
@@ -227,39 +235,50 @@ namespace ImprovedModsPanel
             }
 
             var uiView = FindObjectOfType<UIView>();
+            var plugins =  new Dictionary<PluginManager.PluginInfo,Plugin>();
 
-            var plugins = PluginManager.instance.GetPluginsInfo();
-
-            var pluginNames = new Dictionary<PluginManager.PluginInfo, string>();
-            var pluginDescriptions = new Dictionary<PluginManager.PluginInfo, string>();
-            var pluginLastUpdatedTimeDelta = new Dictionary<PluginManager.PluginInfo, TimeSpan>();
-            var pluginSubscribedTimeDelta = new Dictionary<PluginManager.PluginInfo, TimeSpan>();
-
-            foreach (var current in plugins)
+            foreach (var current in PluginManager.instance.GetPluginsInfo())
             {
-                var instances = current.GetInstances<IUserMod>();
-                if (instances.Length == 0)
+                Plugin plugin;
+                try
                 {
-                    Debug.LogErrorFormat("User assembly \"{0}\" does not implement the IUserMod interface!");
-                    continue;
-                }
+                    var instances = current.GetInstances<IUserMod>();
+                    if (instances.Length == 0)
+                    {
+                        Debug.LogErrorFormat("User assembly \"{0}\" does not implement the IUserMod interface!", current.name);
+                        continue;
+                    }
+                    plugin = new Plugin
+                    {
+                        name = instances[0].Name,
+                        description = instances[0].Description,
+                        lastUpdatedTimeDelta = GetPluginLastModifiedDelta(current),
+                        subscribedTimeDelta = GetPluginCreatedDelta(current)
+                    };
 
-                pluginNames.Add(current, instances[0].Name);
-                pluginDescriptions.Add(current, instances[0].Description);
-                pluginLastUpdatedTimeDelta.Add(current, GetPluginLastModifiedDelta(current));
-                pluginSubscribedTimeDelta.Add(current, GetPluginCreatedDelta(current));
+                }
+                catch
+                {
+                    plugin = new Plugin
+                    {
+                        name = current.assembliesString,
+                        description = "Broken assembly!",
+                        lastUpdatedTimeDelta = GetPluginLastModifiedDelta(current),
+                        subscribedTimeDelta = GetPluginCreatedDelta(current)
+                    };
+                    Debug.LogErrorFormat("Exception happened when getting IUserMod instances from assembly \"{0}\"!", current.name);
+                }
+                plugins.Add(current, plugin);
             }
 
             var uIComponent = modsList.GetComponent<UIComponent>();
             UITemplateManager.ClearInstances("ModEntryTemplate");
 
-            var pluginsSorted = PluginManager.instance.GetPluginsInfo().ToArray();
-
             Func<PluginManager.PluginInfo, PluginManager.PluginInfo, int> comparerLambda;
             var alphabeticalSort = false;
 
             Func<PluginManager.PluginInfo, PluginManager.PluginInfo, int> compareNames =
-                (a, b) => String.Compare(pluginNames[a], pluginNames[b], StringComparison.InvariantCultureIgnoreCase);
+                (a, b) => String.Compare(plugins[a].name, plugins[b].name, StringComparison.InvariantCultureIgnoreCase);
             switch (_sortMode)
             {
                 case SortMode.Alphabetical:
@@ -267,10 +286,10 @@ namespace ImprovedModsPanel
                     alphabeticalSort = true;
                     break;
                 case SortMode.LastUpdated:
-                    comparerLambda = (a, b) => pluginLastUpdatedTimeDelta[a].CompareTo(pluginLastUpdatedTimeDelta[b]);
+                    comparerLambda = (a, b) => plugins[a].lastUpdatedTimeDelta.CompareTo(plugins[b].lastUpdatedTimeDelta);
                     break;
                 case SortMode.LastSubscribed:
-                    comparerLambda = (a, b) => pluginSubscribedTimeDelta[a].CompareTo(pluginSubscribedTimeDelta[b]);
+                    comparerLambda = (a, b) => plugins[a].subscribedTimeDelta.CompareTo(plugins[b].subscribedTimeDelta);
                     break;
                 case SortMode.Active:
                     comparerLambda = (a, b) => b.isEnabled.CompareTo(a.isEnabled);
@@ -279,10 +298,14 @@ namespace ImprovedModsPanel
                     throw new Exception(String.Format("Unknown sort mode: '{0}'", _sortMode));
             }
 
+            var pluginsSorted = plugins.Keys.ToArray();
             Array.Sort(pluginsSorted, new FunctionalComparer<PluginManager.PluginInfo>((a, b) =>
             {
-                var diff = (_sortOrder == SortOrder.Ascending ? comparerLambda : (arg1, arg2) => -comparerLambda(arg1, arg2))(a, b);
-                return diff != 0 || alphabeticalSort ? diff : compareNames(a, b);
+                    var diff =
+                        (_sortOrder == SortOrder.Ascending
+                            ? comparerLambda
+                            : (arg1, arg2) => -comparerLambda(arg1, arg2))(a, b);
+                    return diff != 0 || alphabeticalSort ? diff : compareNames(a, b);
 
             }));
 
@@ -293,7 +316,7 @@ namespace ImprovedModsPanel
                 var packageEntry = UITemplateManager.Get<PackageEntry>("ModEntryTemplate");
                 uIComponent.AttachUIComponent(packageEntry.gameObject);
 
-                packageEntry.entryName = String.Format("{0} (by {{0}})", pluginNames[current]);
+                packageEntry.entryName = String.Format("{0} (by {{0}})", plugins[current].name);
                 packageEntry.entryActive = current.isEnabled;
                 packageEntry.pluginInfo = current;
                 packageEntry.publishedFileId = current.publishedFileID;
@@ -304,7 +327,7 @@ namespace ImprovedModsPanel
 
                 var name = (UILabel)panel.Find("Name");
                 name.textScale = 0.85f;
-                name.tooltip = pluginDescriptions[current];
+                name.tooltip = plugins[current].description;
                 name.textColor = whiteColor;
                 name.textScaleMode = UITextScaleMode.ControlSize;
                 name.position = new Vector3(30.0f, 2.0f, name.position.z);
@@ -335,7 +358,7 @@ namespace ImprovedModsPanel
                 lastUpdated.textAlignment = UIHorizontalAlignment.Right;
                 lastUpdated.textColor = whiteColor;
                 lastUpdated.text = String.Format("Last update: {0}",
-                    DateTimeUtil.TimeSpanToString(pluginLastUpdatedTimeDelta[current]));
+                    DateTimeUtil.TimeSpanToString(plugins[current].lastUpdatedTimeDelta));
                 lastUpdated.AlignTo(panel, UIAlignAnchor.TopRight);
                 lastUpdated.relativePosition = new Vector3(264.0f, 6.0f, 0.0f);
 
