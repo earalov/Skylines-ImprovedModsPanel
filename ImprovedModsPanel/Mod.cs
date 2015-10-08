@@ -5,7 +5,6 @@ namespace ImprovedModsPanel
 
     public class Mod : IUserMod
     {
-
         public string Name
         {
             get
@@ -19,7 +18,6 @@ namespace ImprovedModsPanel
         {
             get { return "Redesigned mod list panel"; }
         }
-
     }
 
 }

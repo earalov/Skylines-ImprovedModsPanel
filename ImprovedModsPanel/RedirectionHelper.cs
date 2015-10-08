@@ -29,7 +29,7 @@ using System.Runtime.InteropServices;
 namespace ImprovedModsPanel
 {
 
-    public struct RedirectCallsState
+    public class RedirectCallsState
     {
         public byte a, b, c, d, e;
         public ulong f;

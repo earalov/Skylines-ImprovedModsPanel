@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using ColossalFramework;
 using ColossalFramework.Plugins;
 using ColossalFramework.Steamworks;
 using ColossalFramework.UI;
@@ -36,78 +37,103 @@ namespace ImprovedModsPanel
             Descending = 1
         }
 
-        private static bool _bootstrapped;
+        private static bool _ui_initialized;
 
-
-        private static bool _detoured = false;
         private static RedirectCallsState _revertState;
         private static RedirectCallsState _revertState2;
 
 
         private static SortMode _sortMode = SortMode.Alphabetical;
         private static SortOrder _sortOrder = SortOrder.Ascending;
-
-        private static GameObject _thisGameObject;
-
         private static UIPanel _sortPanel;
         private static UIDropDown _sortDropDown;
         private static UILabel _sortLabel;
 
         public static void Bootstrap()
         {
-            if (_bootstrapped)
+            var syncObject = GameObject.Find("ImprovedModsPanelSyncObject");
+            if (syncObject != null)
             {
                 return;
             }
-            try
+            syncObject = new GameObject("ImprovedModsPanelSyncObject");
+            syncObject.AddComponent<UpdateHook>().onUnityDestroy = Revert;
+            var updateHook = syncObject.AddComponent<UpdateHook>();
+            updateHook.once = false;
+            updateHook.onUnityUpdate = () =>
             {
-                if (_thisGameObject == null)
+                if (Singleton<LoadingManager>.instance.m_loadedEnvironment == null)
                 {
-                    _thisGameObject = new GameObject { name = "ImprovedModsPanel" };
-                    _thisGameObject.AddComponent<ImprovedModsPanel>();
-                    var updateHook = _thisGameObject.AddComponent<UpdateHook>();
-                    updateHook.once = false;
-                    updateHook.onUnityUpdate = () =>
+                    if (!_ui_initialized)
                     {
-                        var contentManagerPanelObj = GameObject.Find("(Library) ContentManagerPanel");
-                        if (contentManagerPanelObj == null)
+                        var contentManagerPanelGameObject = GameObject.Find("(Library) ContentManagerPanel");
+                        if (contentManagerPanelGameObject == null)
                         {
                             return;
                         }
-                        updateHook.once = true;
-                        InitializeModSortDropDown();
-                        _thisGameObject.gameObject.AddComponent<UpdateHook>().onUnityUpdate = RefreshPlugins;
-                    };
+                        var contentManagerPanel = contentManagerPanelGameObject.GetComponent<ContentManagerPanel>();
+                        if (contentManagerPanel == null)
+                        {
+                            return;
+                        }
+                        var categoryContainerGameObject = GameObject.Find("CategoryContainer");
+                        if (categoryContainerGameObject == null)
+                        {
+                            return;
+                        }
+                        var categoryContainer = categoryContainerGameObject.GetComponent<UITabContainer>();
+                        if (categoryContainer == null)
+                        {
+                            return;
+                        }
+                        var mods = categoryContainer.Find("Mods");
+                        if (mods == null)
+                        {
+                            return;;
+                        }
+                        var modsList = mods.Find("Content");
+                        if (modsList == null)
+                        {
+                            return;
+                        }
+                        var moarGroupObj = GameObject.Find("MoarGroup");
+                        if (moarGroupObj == null)
+                        {
+                            return;
+                        }
+                        syncObject.gameObject.AddComponent<UpdateHook>().onUnityUpdate = RefreshPlugins;
+                    }
                 }
-
-                if (!_detoured)
+                else
                 {
-                    _revertState = RedirectionHelper.RedirectCalls
-                    (
-                        typeof(PackageEntry).GetMethod("FormatPackageName",
-                            BindingFlags.Static | BindingFlags.NonPublic),
-                        typeof(ImprovedModsPanel).GetMethod("FormatPackageName",
-                            BindingFlags.Static | BindingFlags.NonPublic)
-                    );
-
-                    _revertState2 = RedirectionHelper.RedirectCalls
-                    (
-                        typeof(ContentManagerPanel).GetMethod("RefreshPlugins",
-                            BindingFlags.Instance | BindingFlags.NonPublic),
-                        typeof(ImprovedModsPanel).GetMethod("RefreshPlugins",
-                            BindingFlags.Static | BindingFlags.Public)
-                    );
-                    _detoured = true;
+                    Destroy(syncObject);
                 }
-                _bootstrapped = true;
-            }
-            catch (Exception ex)
+
+                updateHook.once = true;
+
+            };
+            if (Singleton<LoadingManager>.instance.m_loadedEnvironment != null)
             {
-                Debug.LogException(ex);
+                return;
             }
+            _revertState = RedirectionHelper.RedirectCalls
+            (
+                typeof(PackageEntry).GetMethod("FormatPackageName",
+                    BindingFlags.Static | BindingFlags.NonPublic),
+                typeof(ImprovedModsPanel).GetMethod("FormatPackageName",
+                    BindingFlags.Static | BindingFlags.NonPublic)
+            );
+
+            _revertState2 = RedirectionHelper.RedirectCalls
+            (
+                typeof(ContentManagerPanel).GetMethod("RefreshPlugins",
+                    BindingFlags.Instance | BindingFlags.NonPublic),
+                typeof(ImprovedModsPanel).GetMethod("RefreshPlugins",
+                    BindingFlags.Static | BindingFlags.Public)
+            );
         }
 
-        private static void InitializeModSortDropDown()
+        private static void Initialize()
         {
             if (_sortDropDown != null)
             {
@@ -115,10 +141,6 @@ namespace ImprovedModsPanel
             }
 
             var moarGroupObj = GameObject.Find("MoarGroup");
-            if (moarGroupObj == null)
-            {
-                return;
-            }
             var moarGroup = moarGroupObj.GetComponent<UIPanel>();
             var moarLabel = moarGroup.Find<UILabel>("Moar");
             var moarButton = moarGroup.Find<UIButton>("Button");
@@ -161,10 +183,16 @@ namespace ImprovedModsPanel
 
         public static void Revert()
         {
-            if (_thisGameObject != null)
+            _ui_initialized = false;
+            if (_revertState != null)
             {
-                Destroy(_thisGameObject);
-                _thisGameObject = null;
+                RedirectionHelper.RevertRedirect(typeof (PackageEntry).GetMethod("FormatPackageName",
+                    BindingFlags.Static | BindingFlags.NonPublic), _revertState);
+            }
+            if (_revertState2 != null)
+            {
+                RedirectionHelper.RevertRedirect(typeof(ContentManagerPanel).GetMethod("RefreshPlugins",
+                        BindingFlags.Instance | BindingFlags.NonPublic), _revertState2);
             }
 
             if (_sortPanel != null)
@@ -174,29 +202,14 @@ namespace ImprovedModsPanel
             _sortPanel = null;
             _sortDropDown = null;
             _sortLabel = null;
+            _sortMode = SortMode.Alphabetical;
+            _sortOrder = SortOrder.Ascending;
 
-            if (!_bootstrapped)
+            var syncObject = GameObject.Find("ImprovedModsPanelSyncObject");
+            if (syncObject != null)
             {
-                return;
+                Destroy(syncObject);
             }
-
-            if (_detoured)
-            {
-                _sortOrder = SortOrder.Ascending;
-                RedirectionHelper.RevertRedirect(typeof(PackageEntry).GetMethod("FormatPackageName",
-                        BindingFlags.Static | BindingFlags.NonPublic), _revertState);
-
-                RedirectionHelper.RevertRedirect(typeof(ContentManagerPanel).GetMethod("RefreshPlugins",
-                    BindingFlags.Instance | BindingFlags.NonPublic), _revertState2);
-                _detoured = false;
-            }
-
-            _bootstrapped = false;
-        }
-
-        void OnDestroy()
-        {
-            Revert();
         }
 
         private static string FormatPackageName(string entryName, string authorName, bool isWorkshopItem)
@@ -222,20 +235,22 @@ namespace ImprovedModsPanel
             public string name;
             public string description;
             public TimeSpan lastUpdatedTimeDelta;
-            public TimeSpan subscribedTimeDelta;   
+            public TimeSpan subscribedTimeDelta;
         }
 
         public static void RefreshPlugins()
         {
-            var categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
-            var modsList = categoryContainer.Find("Mods").Find("Content");
-            if (modsList == null)
+            if (!_ui_initialized)
             {
-                return;
+                Initialize();
+                _ui_initialized = true;
             }
 
+
+            var categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
+            var modsList = categoryContainer.Find("Mods").Find("Content");
             var uiView = FindObjectOfType<UIView>();
-            var plugins =  new Dictionary<PluginManager.PluginInfo,Plugin>();
+            var plugins = new Dictionary<PluginManager.PluginInfo, Plugin>();
 
             foreach (var current in PluginManager.instance.GetPluginsInfo())
             {
@@ -301,11 +316,11 @@ namespace ImprovedModsPanel
             var pluginsSorted = plugins.Keys.ToArray();
             Array.Sort(pluginsSorted, new FunctionalComparer<PluginManager.PluginInfo>((a, b) =>
             {
-                    var diff =
-                        (_sortOrder == SortOrder.Ascending
-                            ? comparerLambda
-                            : (arg1, arg2) => -comparerLambda(arg1, arg2))(a, b);
-                    return diff != 0 || alphabeticalSort ? diff : compareNames(a, b);
+                var diff =
+                    (_sortOrder == SortOrder.Ascending
+                        ? comparerLambda
+                        : (arg1, arg2) => -comparerLambda(arg1, arg2))(a, b);
+                return diff != 0 || alphabeticalSort ? diff : compareNames(a, b);
 
             }));
 

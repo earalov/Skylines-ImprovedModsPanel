@@ -6,7 +6,10 @@ namespace ImprovedModsPanel
     {
         public delegate void OnUnityUpdate();
 
+        public delegate void OnUnityDestroy();
+
         public OnUnityUpdate onUnityUpdate = null;
+        public OnUnityDestroy onUnityDestroy = null;
         public bool once = true;
 
         void Update()
@@ -18,6 +21,14 @@ namespace ImprovedModsPanel
                 {
                     Destroy(this);
                 }
+            }
+        }
+
+        void OnDestroy()
+        {
+            if (onUnityDestroy != null)
+            {
+                onUnityDestroy();
             }
         }
 
