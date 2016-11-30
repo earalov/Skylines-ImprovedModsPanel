@@ -6,7 +6,6 @@ using System.Linq;
 using System.Reflection;
 using ColossalFramework;
 using ColossalFramework.Plugins;
-using ColossalFramework.Steamworks;
 using ColossalFramework.UI;
 using ICities;
 using UnityEngine;
@@ -240,153 +239,153 @@ namespace ImprovedModsPanel
 
         public static void RefreshPlugins()
         {
-            if (!_ui_initialized)
-            {
-                Initialize();
-                _ui_initialized = true;
-            }
-
-
-            var categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
-            var modsList = categoryContainer.Find("Mods").Find("Content");
-            var uiView = FindObjectOfType<UIView>();
-            var plugins = new Dictionary<PluginManager.PluginInfo, Plugin>();
-
-            foreach (var current in PluginManager.instance.GetPluginsInfo())
-            {
-                Plugin plugin;
-                try
-                {
-                    var instances = current.GetInstances<IUserMod>();
-                    if (instances.Length == 0)
-                    {
-                        Debug.LogErrorFormat("User assembly \"{0}\" does not implement the IUserMod interface!", current.name);
-                        continue;
-                    }
-                    plugin = new Plugin
-                    {
-                        name = instances[0].Name,
-                        description = instances[0].Description,
-                        lastUpdatedTimeDelta = GetPluginLastModifiedDelta(current),
-                        subscribedTimeDelta = GetPluginCreatedDelta(current)
-                    };
-
-                }
-                catch
-                {
-                    plugin = new Plugin
-                    {
-                        name = current.assembliesString,
-                        description = "Broken assembly!",
-                        lastUpdatedTimeDelta = GetPluginLastModifiedDelta(current),
-                        subscribedTimeDelta = GetPluginCreatedDelta(current)
-                    };
-                    Debug.LogErrorFormat("Exception happened when getting IUserMod instances from assembly \"{0}\"!", current.name);
-                }
-                plugins.Add(current, plugin);
-            }
-
-            var uIComponent = modsList.GetComponent<UIComponent>();
-            UITemplateManager.ClearInstances("ModEntryTemplate");
-
-            Func<PluginManager.PluginInfo, PluginManager.PluginInfo, int> comparerLambda;
-            var alphabeticalSort = false;
-
-            Func<PluginManager.PluginInfo, PluginManager.PluginInfo, int> compareNames =
-                (a, b) => String.Compare(plugins[a].name, plugins[b].name, StringComparison.InvariantCultureIgnoreCase);
-            switch (_sortMode)
-            {
-                case SortMode.Alphabetical:
-                    comparerLambda = compareNames;
-                    alphabeticalSort = true;
-                    break;
-                case SortMode.LastUpdated:
-                    comparerLambda = (a, b) => plugins[a].lastUpdatedTimeDelta.CompareTo(plugins[b].lastUpdatedTimeDelta);
-                    break;
-                case SortMode.LastSubscribed:
-                    comparerLambda = (a, b) => plugins[a].subscribedTimeDelta.CompareTo(plugins[b].subscribedTimeDelta);
-                    break;
-                case SortMode.Active:
-                    comparerLambda = (a, b) => b.isEnabled.CompareTo(a.isEnabled);
-                    break;
-                default:
-                    throw new Exception(String.Format("Unknown sort mode: '{0}'", _sortMode));
-            }
-
-            var pluginsSorted = plugins.Keys.ToArray();
-            Array.Sort(pluginsSorted, new FunctionalComparer<PluginManager.PluginInfo>((a, b) =>
-            {
-                var diff =
-                    (_sortOrder == SortOrder.Ascending
-                        ? comparerLambda
-                        : (arg1, arg2) => -comparerLambda(arg1, arg2))(a, b);
-                return diff != 0 || alphabeticalSort ? diff : compareNames(a, b);
-
-            }));
-
-            var whiteColor = new Color32(200, 200, 200, 255);
-
-            foreach (var current in pluginsSorted)
-            {
-                var packageEntry = UITemplateManager.Get<PackageEntry>("ModEntryTemplate");
-                uIComponent.AttachUIComponent(packageEntry.gameObject);
-
-                packageEntry.entryName = String.Format("{0} (by {{0}})", plugins[current].name);
-                packageEntry.entryActive = current.isEnabled;
-                packageEntry.pluginInfo = current;
-                packageEntry.publishedFileId = current.publishedFileID;
-                packageEntry.RequestDetails();
-
-                var panel = packageEntry.gameObject.GetComponent<UIPanel>();
-                panel.size = new Vector2(panel.size.x, 24.0f);
-
-                var name = (UILabel)panel.Find("Name");
-                name.textScale = 0.85f;
-                name.tooltip = plugins[current].description;
-                name.textColor = whiteColor;
-                name.textScaleMode = UITextScaleMode.ControlSize;
-                name.position = new Vector3(30.0f, 2.0f, name.position.z);
-
-                var view = (UIButton)panel.Find("View");
-                view.size = new Vector2(20.0f, 20.0f);
-                view.textScale = 0.7f;
-                view.position = new Vector3(675.0f, 2.0f, view.position.z);
-
-                var share = (UIButton)panel.Find("Share");
-                share.size = new Vector2(84.0f, 20.0f);
-                share.textScale = 0.7f;
-                share.position = new Vector3(703.0f, 2.0f, share.position.z);
-
-                var options = (UIButton)panel.Find("Options");
-                options.size = new Vector2(84.0f, 20.0f);
-                options.textScale = 0.7f;
-                options.position = new Vector3(790.0f, 2.0f, options.position.z);
-
-
-                var lastUpdated = (UILabel)panel.Find("LastUpdated") ??
-                                  uiView.AddUIComponent(typeof(UILabel)) as UILabel;
-
-                lastUpdated.name = "LastUpdated";
-                lastUpdated.autoSize = false;
-                lastUpdated.size = new Vector2(400.0f, 18.0f);
-                lastUpdated.textScale = 0.8f;
-                lastUpdated.textAlignment = UIHorizontalAlignment.Right;
-                lastUpdated.textColor = whiteColor;
-                lastUpdated.text = String.Format("Last update: {0}",
-                    DateTimeUtil.TimeSpanToString(plugins[current].lastUpdatedTimeDelta));
-                lastUpdated.AlignTo(panel, UIAlignAnchor.TopRight);
-                lastUpdated.relativePosition = new Vector3(264.0f, 6.0f, 0.0f);
-
-                var delete = (UIButton)panel.Find("Delete");
-                delete.size = new Vector2(24.0f, 24.0f);
-                delete.position = new Vector3(895.0f, 2.0f, delete.position.z);
-
-                var active = (UICheckBox)panel.Find("Active");
-                active.position = new Vector3(4.0f, -2.0f, active.position.z);
-
-                var onOff = (UILabel)active.Find("OnOff");
-                onOff.enabled = false;
-            }
+//            if (!_ui_initialized)
+//            {
+//                Initialize();
+//                _ui_initialized = true;
+//            }
+//
+//
+//            var categoryContainer = GameObject.Find("CategoryContainer").GetComponent<UITabContainer>();
+//            var modsList = categoryContainer.Find("Mods").Find("Content");
+//            var uiView = FindObjectOfType<UIView>();
+//            var plugins = new Dictionary<PluginManager.PluginInfo, Plugin>();
+//
+//            foreach (var current in PluginManager.instance.GetPluginsInfo())
+//            {
+//                Plugin plugin;
+//                try
+//                {
+//                    var instances = current.GetInstances<IUserMod>();
+//                    if (instances.Length == 0)
+//                    {
+//                        Debug.LogErrorFormat("User assembly \"{0}\" does not implement the IUserMod interface!", current.name);
+//                        continue;
+//                    }
+//                    plugin = new Plugin
+//                    {
+//                        name = instances[0].Name,
+//                        description = instances[0].Description,
+//                        lastUpdatedTimeDelta = GetPluginLastModifiedDelta(current),
+//                        subscribedTimeDelta = GetPluginCreatedDelta(current)
+//                    };
+//
+//                }
+//                catch
+//                {
+//                    plugin = new Plugin
+//                    {
+//                        name = current.assembliesString,
+//                        description = "Broken assembly!",
+//                        lastUpdatedTimeDelta = GetPluginLastModifiedDelta(current),
+//                        subscribedTimeDelta = GetPluginCreatedDelta(current)
+//                    };
+//                    Debug.LogErrorFormat("Exception happened when getting IUserMod instances from assembly \"{0}\"!", current.name);
+//                }
+//                plugins.Add(current, plugin);
+//            }
+//
+//            var uIComponent = modsList.GetComponent<UIComponent>();
+//            UITemplateManager.ClearInstances("ModEntryTemplate");
+//
+//            Func<PluginManager.PluginInfo, PluginManager.PluginInfo, int> comparerLambda;
+//            var alphabeticalSort = false;
+//
+//            Func<PluginManager.PluginInfo, PluginManager.PluginInfo, int> compareNames =
+//                (a, b) => String.Compare(plugins[a].name, plugins[b].name, StringComparison.InvariantCultureIgnoreCase);
+//            switch (_sortMode)
+//            {
+//                case SortMode.Alphabetical:
+//                    comparerLambda = compareNames;
+//                    alphabeticalSort = true;
+//                    break;
+//                case SortMode.LastUpdated:
+//                    comparerLambda = (a, b) => plugins[a].lastUpdatedTimeDelta.CompareTo(plugins[b].lastUpdatedTimeDelta);
+//                    break;
+//                case SortMode.LastSubscribed:
+//                    comparerLambda = (a, b) => plugins[a].subscribedTimeDelta.CompareTo(plugins[b].subscribedTimeDelta);
+//                    break;
+//                case SortMode.Active:
+//                    comparerLambda = (a, b) => b.isEnabled.CompareTo(a.isEnabled);
+//                    break;
+//                default:
+//                    throw new Exception(String.Format("Unknown sort mode: '{0}'", _sortMode));
+//            }
+//
+//            var pluginsSorted = plugins.Keys.ToArray();
+//            Array.Sort(pluginsSorted, new FunctionalComparer<PluginManager.PluginInfo>((a, b) =>
+//            {
+//                var diff =
+//                    (_sortOrder == SortOrder.Ascending
+//                        ? comparerLambda
+//                        : (arg1, arg2) => -comparerLambda(arg1, arg2))(a, b);
+//                return diff != 0 || alphabeticalSort ? diff : compareNames(a, b);
+//
+//            }));
+//
+//            var whiteColor = new Color32(200, 200, 200, 255);
+//
+//            foreach (var current in pluginsSorted)
+//            {
+//                var packageEntry = UITemplateManager.Get<PackageEntry>("ModEntryTemplate");
+//                uIComponent.AttachUIComponent(packageEntry.gameObject);
+//
+//                packageEntry.entryName = String.Format("{0} (by {{0}})", plugins[current].name);
+//                packageEntry.entryActive = current.isEnabled;
+//                packageEntry.pluginInfo = current;
+//                packageEntry.publishedFileId = current.publishedFileID;
+//                packageEntry.RequestDetails();
+//
+//                var panel = packageEntry.gameObject.GetComponent<UIPanel>();
+//                panel.size = new Vector2(panel.size.x, 24.0f);
+//
+//                var name = (UILabel)panel.Find("Name");
+//                name.textScale = 0.85f;
+//                name.tooltip = plugins[current].description;
+//                name.textColor = whiteColor;
+//                name.textScaleMode = UITextScaleMode.ControlSize;
+//                name.position = new Vector3(30.0f, 2.0f, name.position.z);
+//
+//                var view = (UIButton)panel.Find("View");
+//                view.size = new Vector2(20.0f, 20.0f);
+//                view.textScale = 0.7f;
+//                view.position = new Vector3(675.0f, 2.0f, view.position.z);
+//
+//                var share = (UIButton)panel.Find("Share");
+//                share.size = new Vector2(84.0f, 20.0f);
+//                share.textScale = 0.7f;
+//                share.position = new Vector3(703.0f, 2.0f, share.position.z);
+//
+//                var options = (UIButton)panel.Find("Options");
+//                options.size = new Vector2(84.0f, 20.0f);
+//                options.textScale = 0.7f;
+//                options.position = new Vector3(790.0f, 2.0f, options.position.z);
+//
+//
+//                var lastUpdated = (UILabel)panel.Find("LastUpdated") ??
+//                                  uiView.AddUIComponent(typeof(UILabel)) as UILabel;
+//
+//                lastUpdated.name = "LastUpdated";
+//                lastUpdated.autoSize = false;
+//                lastUpdated.size = new Vector2(400.0f, 18.0f);
+//                lastUpdated.textScale = 0.8f;
+//                lastUpdated.textAlignment = UIHorizontalAlignment.Right;
+//                lastUpdated.textColor = whiteColor;
+//                lastUpdated.text = String.Format("Last update: {0}",
+//                    DateTimeUtil.TimeSpanToString(plugins[current].lastUpdatedTimeDelta));
+//                lastUpdated.AlignTo(panel, UIAlignAnchor.TopRight);
+//                lastUpdated.relativePosition = new Vector3(264.0f, 6.0f, 0.0f);
+//
+//                var delete = (UIButton)panel.Find("Delete");
+//                delete.size = new Vector2(24.0f, 24.0f);
+//                delete.position = new Vector3(895.0f, 2.0f, delete.position.z);
+//
+//                var active = (UICheckBox)panel.Find("Active");
+//                active.position = new Vector3(4.0f, -2.0f, active.position.z);
+//
+//                var onOff = (UILabel)active.Find("OnOff");
+//                onOff.enabled = false;
+//            }
         }
 
         private static TimeSpan GetPluginLastModifiedDelta(PluginManager.PluginInfo plugin)

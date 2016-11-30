@@ -9,15 +9,12 @@ namespace ImprovedModsPanel
         {
             get
             {
-                ImprovedModsPanel.Bootstrap();
+//                ImprovedModsPanel.Bootstrap();
                 return "ImprovedModsPanel";
             }
         }
 
-        public string Description
-        {
-            get { return "Redesigned mod list panel"; }
-        }
+        public string Description => "Redesigned mod list panel";
     }
 
 }
